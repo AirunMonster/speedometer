@@ -1,10 +1,10 @@
 package velocimetro.proyecto.app.morales.nuria.velocimetro;
 
 import android.Manifest;
-import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
@@ -12,92 +12,152 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.content.Intent;
 import android.location.LocationProvider;
+import android.net.sip.SipAudioCall;
 import android.os.BatteryManager;
 import android.os.Build;
+import android.preference.PreferenceManager;
+import android.preference.SwitchPreference;
 import android.provider.Settings;
+import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.support.design.widget.FloatingActionButton;
+import android.support.design.widget.Snackbar;
+import android.support.v7.app.ActionBarDrawerToggle;
+import android.view.View;
+import android.support.design.widget.NavigationView;
+import android.support.v4.view.GravityCompat;
+import android.support.v4.widget.DrawerLayout;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
+import android.support.v7.widget.Toolbar;
 import android.util.Log;
-import android.view.View;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
     AutoResizeTextView indicadorVelocidad;
     LinearLayout linearLayout;
     LocationManager locationManager;
     MiLocationListener locationListener = null;
-    BroadcastReceiver broadcastReceiver;
+    SharedPreferences.OnSharedPreferenceChangeListener listener;
+    Boolean battery_on = true;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState){
+    protected void onCreate(final Bundle savedInstanceState){
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        //Navigation Drawer ----------------------------------------------------------------------------->
+        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+
+        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
+        fab.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
+                        .setAction("Action", null).show();
+            }
+        });
+
+        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
+                this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
+        drawer.setDrawerListener(toggle);
+        toggle.syncState();
+
+        NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
+        navigationView.setNavigationItemSelectedListener(this);
+
+        //Navigation Drawer -------------------------------------------------------------------------------------------->
+
         indicadorVelocidad = (AutoResizeTextView) findViewById(R.id.indicadorVelocidad);
-        linearLayout = (LinearLayout) findViewById(R.id.linearLayout);
+        linearLayout = (LinearLayout) findViewById(R.id.content_main);
+
+        Intent intent = getIntent();
+        Bundle bundle = intent.getExtras(); //Creación del Bundle
+
+        if (bundle != null) {
+            String texto = (String) bundle.get("DATOS");
+            Toast.makeText(this, "texto: "+texto, Toast.LENGTH_LONG).show();
+            if (texto != null) {
+                if (texto.equals("conectada")) {
+                    Toast.makeText(this, "conectada", Toast.LENGTH_LONG).show();
+                    battery_on = true;
+                } else if (texto.equals("desconectada")) {
+                    battery_on = false;
+                    Toast.makeText(this, "desconectada", Toast.LENGTH_LONG).show();
+                }
+            }
+        }
+
+        // Check the User Preferences ---------------------------------------------------------------------------------->
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener);
+        listener = new SharedPreferences.OnSharedPreferenceChangeListener() {
+            @Override
+            public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String s) {
+                String auxString = sharedPreferences.toString();
+                Toast.makeText(getApplicationContext(), "auxString: "+auxString, Toast.LENGTH_LONG).show();
+                Boolean in_out = true;
+                if ((s.equals("switch_keep_screen_on")) && in_out) {
+                    in_out = false;
+                    Toast.makeText(getApplicationContext(), "Preferences Changed", Toast.LENGTH_LONG).show();
+                    Boolean screen_on2 = sharedPreferences.getBoolean("switch_keep_screen_on", true);
+                    Toast.makeText(getApplicationContext(), "isScreenOn 2", Toast.LENGTH_LONG).show();
+                    isScreenOn(screen_on2);
+                }
+            }
+        };
+        final Boolean screen_on = sharedPreferences.getBoolean("switch_keep_screen_on", true);
+        Toast.makeText(this,"screen_on: "+screen_on.toString(),Toast.LENGTH_LONG).show();
+        sharedPreferences.registerOnSharedPreferenceChangeListener(listener);
+
+        // User Preferences -------------------------------------------------------------------------------------------->
+        Toast.makeText(getApplicationContext(), "isScreenOn", Toast.LENGTH_LONG).show();
+        isScreenOn(screen_on);
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
                 && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION,}, 1000);
         }
         else {
-            //Toast.makeText(MainActivity.this, "Iniciando.....", Toast.LENGTH_SHORT).show();
             locationStart();
         }
-
-//        Intent intent = getIntent();
-//        Bundle bundle = intent.getExtras();
-//        Toast.makeText(this, "Va a entrar en bundle", Toast.LENGTH_SHORT).show();
-//        if (bundle != null) {
-//            Toast.makeText(this, "Entra en bundle", Toast.LENGTH_SHORT).show();
-//            String cargaOnOFF = (String) bundle.get("CARGA");
-//            Toast.makeText(this, "cargaOnOFF: "+cargaOnOFF, Toast.LENGTH_SHORT).show();
-//            if (cargaOnOFF =="charging"){
-//                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-//                Toast.makeText(this, "La pantalla no se apagará - MainActivity", Toast.LENGTH_SHORT).show();
-//            }
-//            else if (cargaOnOFF =="not charging"){
-//                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-//                Toast.makeText(this, "La pantalla se apagará - MainActivity", Toast.LENGTH_SHORT).show();
-//            }
-//        }
-
-
-//        PowerConnectionReceiver power = new PowerConnectionReceiver();
-//        power.onReceive(this,intent);
-//        int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-//        Toast.makeText(this, "MainActivity - Status "+status, Toast.LENGTH_SHORT).show();
-//        Toast.makeText(this, "MainActivity - Battery Status "+BatteryManager.EXTRA_STATUS, Toast.LENGTH_SHORT).show();
-//        Toast.makeText(this, "MainActivity - Battery Status "+BatteryManager.BATTERY_STATUS_CHARGING, Toast.LENGTH_SHORT).show();
-//        Toast.makeText(this, "MainActivity - Battery Status "+BatteryManager.BATTERY_STATUS_FULL, Toast.LENGTH_SHORT).show();
-//        if (status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL) {
-//            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-//            Toast.makeText(this, "La pantalla no se apagará - MainActivity", Toast.LENGTH_SHORT).show();
-//        }
-//        else {
-//            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-//            Toast.makeText(this, "La pantalla se apagará - MainActivity", Toast.LENGTH_SHORT).show();
-//        }
-        if (isPlugged(this)) {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            Toast.makeText(this, "La pantalla se apagará - MainActivity", Toast.LENGTH_SHORT).show();
-        }
-        else {
-            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            Toast.makeText(this, "La pantalla no se apagará - MainActivity", Toast.LENGTH_SHORT).show();
-        }
-
     }
 
+    // User Preferences screen-On is the main option over isPlugged. isPlugged has used only if screen-on is false ------->
+    public void isScreenOn (Boolean screen_on){
+        if (screen_on) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            Toast.makeText(this,"La pantalla permanecerá encendida.",Toast.LENGTH_LONG).show();
+        }
+        else {
+            if (battery_on) {
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                Toast.makeText(this, "La pantalla permanecerá encendida. Batería cargando.", Toast.LENGTH_LONG).show();
+            } else {
+                if (isPlugged(this)) {
+                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    Toast.makeText(this, "La pantalla permanecerá encendida. Cargador Puesto.", Toast.LENGTH_LONG).show();
+                } else {
+                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    Toast.makeText(this, "La pantalla se apagará.", Toast.LENGTH_LONG).show();
+                }
+            }
+        }
+    }
+
+    // Check if battery is Plugged --------------------------------------------------------------------------------------->
     public static boolean isPlugged(Context context) {
-        boolean isPlugged= false;
+        boolean isPlugged = false;
         Intent intent = context.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-        int plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
+        //int plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
+        int plugged = intent != null ? intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) : 0;
         isPlugged = plugged == BatteryManager.BATTERY_PLUGGED_AC || plugged == BatteryManager.BATTERY_PLUGGED_USB;
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.JELLY_BEAN) {
             isPlugged = isPlugged || plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS;
@@ -105,35 +165,54 @@ public class MainActivity extends AppCompatActivity {
         return isPlugged;
     }
 
+    public static class PlugInControlReceiver extends BroadcastReceiver {
+        public PlugInControlReceiver (){
+        }
+
+        public void onReceive (Context context, Intent intent){
+            String action = intent.getAction();
+            Intent intentPan = new Intent(context,MainActivity.class);
+            intentPan.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            String datos = "";
+
+            if (action.equals(Intent.ACTION_POWER_CONNECTED)){
+                Toast.makeText(context,"Bateria conectada",Toast.LENGTH_LONG).show();
+                datos = "conectada";
+                intentPan.putExtra("DATOS", datos);
+                context.startActivity(intentPan);
+            }
+            else if (action.equals(Intent.ACTION_POWER_DISCONNECTED)){
+                Toast.makeText(context,"Bateria desconectada",Toast.LENGTH_LONG).show();
+                datos = "desconectada";
+                intentPan.putExtra("DATOS", datos);
+                context.startActivity(intentPan);
+                //getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            }
+        }
+    }
+
     private void locationStart() {
-        //Toast.makeText(MainActivity.this, "locationStart()....", Toast.LENGTH_SHORT).show();
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         locationListener = new MiLocationListener();
-        //locationListener.setMainActivity(this);
         final boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
         if (!gpsEnabled) {
-            Toast.makeText(MainActivity.this, "Gps no está activado...", Toast.LENGTH_SHORT).show();
+            Toast.makeText(MainActivity.this, R.string.gps_turn_off+"...", Toast.LENGTH_SHORT).show();
             Intent settingsIntent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
             startActivity(settingsIntent);
         }
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
                 && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            //Toast.makeText(MainActivity.this, "No hay permisos. Se piden de nuevo...", Toast.LENGTH_SHORT).show();
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION,}, 1000);
             return;
         }
         //mlocManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, (LocationListener) locationListener);
-        //Toast.makeText(MainActivity.this, "Llamamos a requestLocationUpdates...", Toast.LENGTH_LONG).show();
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
     }
 
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        //Toast.makeText(MainActivity.this, "Llamamos a onRequestPermissionsResult...", Toast.LENGTH_SHORT).show();
         if (requestCode == 1000) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                //Toast.makeText(MainActivity.this, "onRequestPermissionsResult - locationStart()...", Toast.LENGTH_SHORT).show();
                 locationStart();
-                //return;
             }
         }
     }
@@ -164,15 +243,77 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    //Navigation Drawer ---------------------------------------------------------->
+    @Override
+    public void onBackPressed() {
+        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        if (drawer.isDrawerOpen(GravityCompat.START)) {
+            drawer.closeDrawer(GravityCompat.START);
+        } else {
+            super.onBackPressed();
+        }
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+        int id = item.getItemId();
+
+        //noinspection SimplifiableIfStatement
+        if (id == R.id.action_settings) {
+            // New Screen Settings
+            Intent intent = new Intent(this, SettingsActivity.class);
+            startActivity(intent);
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+    @SuppressWarnings("StatementWithEmptyBody")
+    @Override
+    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+        // Handle navigation view item clicks here.
+        int id = item.getItemId();
+
+        if (id == R.id.nav_camara) {
+            // Handle the camera action
+        } else if (id == R.id.nav_gallery) {
+
+        } else if (id == R.id.nav_slideshow) {
+
+        } else if (id == R.id.nav_manage) {
+
+        } else if (id == R.id.nav_share) {
+
+        } else if (id == R.id.nav_manage) {
+
+        }
+
+        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        drawer.closeDrawer(GravityCompat.START);
+        return true;
+
+    }
+
+    //Navigation Drawer ---------------------------------------------------------->
+
     private class MiLocationListener implements LocationListener {
         // Este método se llama cuando la posición GPS cambia
         @Override
         public void onLocationChanged(Location location) {
-            //Toast.makeText(MainActivity.this, "onLocationChanged.....", Toast.LENGTH_SHORT).show();
             float vel = location.getSpeed();
             double vel2 = (((double) vel * 60) * 60) / 1000;
             vel2 = (Math.round(vel2*100d))/100d;
-            //Toast.makeText(MainActivity.this, "Velocidad: "+String.valueOf(vel2), Toast.LENGTH_SHORT).show();
             indicadorVelocidad.setText(String.valueOf(vel2));
             ComprobarVelocidad (vel2);
         }
@@ -183,15 +324,12 @@ public class MainActivity extends AppCompatActivity {
             switch (i) {
                 case LocationProvider.AVAILABLE:
                     Log.d("debug", "LocationProvider.AVAILABLE");
-                    //Toast.makeText(MainActivity.this, "LocationProvider.AVAILABLE", Toast.LENGTH_SHORT).show();
                     break;
                 case LocationProvider.OUT_OF_SERVICE:
                     Log.d("debug", "LocationProvider.OUT_OF_SERVICE");
-                    //Toast.makeText(MainActivity.this, "LocationProvider.OUT_OF_SERVICE", Toast.LENGTH_SHORT).show();
                     break;
                 case LocationProvider.TEMPORARILY_UNAVAILABLE:
                     Log.d("debug", "LocationProvider.TEMPORARILY_UNAVAILABLE");
-                    //Toast.makeText(MainActivity.this, "LocationProvider.TEMPORARILY_UNAVAILABLE", Toast.LENGTH_SHORT).show();
                     break;
             }
         }
@@ -199,14 +337,24 @@ public class MainActivity extends AppCompatActivity {
         //Este método se llama cuando el usuario ha activado el GPS.
         @Override
         public void onProviderEnabled(String s) {
-            Toast.makeText(MainActivity.this, "GPS activado.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(MainActivity.this, R.string.gps_turn_on, Toast.LENGTH_SHORT).show();
         }
 
         //Este método se llama cuando el usuario desactive el GPS.
         @Override
         public void onProviderDisabled(String s) {
-            Toast.makeText(MainActivity.this, "GPS desactivado. Por favor activa el GPS.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(MainActivity.this, R.string.gps_turn_off_please, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
     }
 
     @Override
@@ -217,5 +365,8 @@ public class MainActivity extends AppCompatActivity {
         // Hay que liberar el buffer que se ha llenado con el Listener.
         //Toast.makeText(MainActivity.this, "Finalizando.....", Toast.LENGTH_SHORT).show();
         locationManager.removeUpdates(locationListener);
+        //Free the SharedPreferenes listener. If we can't do it then repeat the same many times.
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener);
     }
 }
