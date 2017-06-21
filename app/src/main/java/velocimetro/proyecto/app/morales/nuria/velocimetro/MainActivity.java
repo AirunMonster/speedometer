@@ -1,6 +1,7 @@
 package velocimetro.proyecto.app.morales.nuria.velocimetro;
 
 import android.Manifest;
+import android.app.Application;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.IntentFilter;
@@ -172,7 +173,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         public void onReceive (Context context, Intent intent){
             String action = intent.getAction();
             Intent intentPan = new Intent(context,MainActivity.class);
-            intentPan.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            intentPan.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            //intentPan.setFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             String datos = "";
 
             if (action.equals(Intent.ACTION_POWER_CONNECTED)){
@@ -186,7 +188,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 datos = "desconectada";
                 intentPan.putExtra("DATOS", datos);
                 context.startActivity(intentPan);
-                //getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             }
         }
     }
