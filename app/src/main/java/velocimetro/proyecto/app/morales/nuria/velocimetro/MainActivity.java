@@ -39,13 +39,16 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import static velocimetro.proyecto.app.morales.nuria.velocimetro.Helper.isAppRunning;
+
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
     AutoResizeTextView indicadorVelocidad;
     LinearLayout linearLayout;
     LocationManager locationManager;
     MiLocationListener locationListener = null;
     SharedPreferences.OnSharedPreferenceChangeListener listener;
-    Boolean battery_on = true;
+    Integer battery_on = 0; //Values: 0 - Initial value; 1 - Battery On; 2 - Battery Off.
+    PlugInControlReceiver mReceiver;
 
     @Override
     protected void onCreate(final Bundle savedInstanceState){
@@ -79,6 +82,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         indicadorVelocidad = (AutoResizeTextView) findViewById(R.id.indicadorVelocidad);
         linearLayout = (LinearLayout) findViewById(R.id.content_main);
 
+        //Battery Receiver --------------------------------------------------------------------------------------------->
+        mReceiver = new PlugInControlReceiver();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_POWER_CONNECTED);
+        filter.addAction(Intent.ACTION_POWER_DISCONNECTED);
+        Toast.makeText(this, "registerReceiver", Toast.LENGTH_LONG).show();
+        registerReceiver(mReceiver,filter);
+        //Battery Receiver Fin ----------------------------------------------------------------------------------------->
+
         Intent intent = getIntent();
         Bundle bundle = intent.getExtras(); //Creación del Bundle
 
@@ -88,9 +100,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             if (texto != null) {
                 if (texto.equals("conectada")) {
                     Toast.makeText(this, "conectada", Toast.LENGTH_LONG).show();
-                    battery_on = true;
+                    battery_on = 1;
                 } else if (texto.equals("desconectada")) {
-                    battery_on = false;
+                    battery_on = 2;
                     Toast.makeText(this, "desconectada", Toast.LENGTH_LONG).show();
                 }
             }
@@ -138,17 +150,25 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             Toast.makeText(this,"La pantalla permanecerá encendida.",Toast.LENGTH_LONG).show();
         }
         else {
-            if (battery_on) {
-                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                Toast.makeText(this, "La pantalla permanecerá encendida. Batería cargando.", Toast.LENGTH_LONG).show();
-            } else {
-                if (isPlugged(this)) {
+            switch (battery_on){
+                case 0:
+                case 2:
+                    Toast.makeText(this, "Case: "+battery_on.toString(), Toast.LENGTH_LONG).show();
+                    if (isPlugged(this)) {
+                        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                        Toast.makeText(this, "La pantalla permanecerá encendida. Cargador Puesto.", Toast.LENGTH_LONG).show();
+                    } else {
+                        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                        Toast.makeText(this, "La pantalla se apagará.", Toast.LENGTH_LONG).show();
+                    }
+                    break;
+                case 1:
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                    Toast.makeText(this, "La pantalla permanecerá encendida. Cargador Puesto.", Toast.LENGTH_LONG).show();
-                } else {
-                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                    Toast.makeText(this, "La pantalla se apagará.", Toast.LENGTH_LONG).show();
-                }
+                    Toast.makeText(this, "La pantalla permanecerá encendida. Batería cargando.", Toast.LENGTH_LONG).show();
+                    break;
+                default:
+                    Toast.makeText(this, "Hay un error.", Toast.LENGTH_LONG).show();
+                    break;
             }
         }
     }
@@ -166,25 +186,25 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         return isPlugged;
     }
 
-    public static class PlugInControlReceiver extends BroadcastReceiver {
-        public PlugInControlReceiver (){
-        }
+    private class PlugInControlReceiver extends BroadcastReceiver {
 
-        public void onReceive (Context context, Intent intent){
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            //if (isAppRunning(context,"velocimetro.proyecto.app.morales.nuria.velocimetro"))
+            Toast.makeText(context, "PlugInControlReceiver", Toast.LENGTH_LONG).show();
             String action = intent.getAction();
-            Intent intentPan = new Intent(context,MainActivity.class);
+            Intent intentPan = new Intent(context, MainActivity.class);
             intentPan.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             //intentPan.setFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             String datos = "";
 
-            if (action.equals(Intent.ACTION_POWER_CONNECTED)){
-                Toast.makeText(context,"Bateria conectada",Toast.LENGTH_LONG).show();
+            if (action.equals(Intent.ACTION_POWER_CONNECTED)) {
+                Toast.makeText(context, "Bateria conectada", Toast.LENGTH_LONG).show();
                 datos = "conectada";
                 intentPan.putExtra("DATOS", datos);
                 context.startActivity(intentPan);
-            }
-            else if (action.equals(Intent.ACTION_POWER_DISCONNECTED)){
-                Toast.makeText(context,"Bateria desconectada",Toast.LENGTH_LONG).show();
+            } else if (action.equals(Intent.ACTION_POWER_DISCONNECTED)) {
+                Toast.makeText(context, "Bateria desconectada", Toast.LENGTH_LONG).show();
                 datos = "desconectada";
                 intentPan.putExtra("DATOS", datos);
                 context.startActivity(intentPan);
@@ -349,6 +369,26 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     @Override
+    protected void onStart() {
+        Toast.makeText(MainActivity.this, "onStart", Toast.LENGTH_SHORT).show();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_POWER_CONNECTED);
+        filter.addAction(Intent.ACTION_POWER_DISCONNECTED);
+        registerReceiver(mReceiver,filter);
+
+        super.onStart();
+    }
+
+    @Override
+    protected void onStop() {
+        Toast.makeText(MainActivity.this, "onStop", Toast.LENGTH_SHORT).show();
+        if (mReceiver != null) {
+            unregisterReceiver(mReceiver);
+        }
+        super.onStop();
+    }
+
+    @Override
     protected void onPause() {
         super.onPause();
     }
@@ -360,6 +400,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     @Override
     protected void onDestroy() {
+        Toast.makeText(MainActivity.this, "onDestroy", Toast.LENGTH_SHORT).show();
         super.onDestroy();
         // Le indicamos que ya no tiene que estar la pantalla permanentemente encendida.
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

@@ -27,12 +27,6 @@
             android:name=".SettingsActivity"
             android:label="@string/action_settings">
         </activity>
-        <receiver android:name=".MainActivity$PlugInControlReceiver">
-            <intent-filter>
-                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
-                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
-            </intent-filter>
-        </receiver>
     </application>
 
 </manifest>
